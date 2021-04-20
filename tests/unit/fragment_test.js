@@ -4,6 +4,7 @@ import { Copyable } from 'ember-copy';
 import Ember from 'ember';
 import { module, test } from 'qunit';
 import { setupApplicationTest } from 'ember-qunit';
+import Pretender from 'pretender';
 
 let store;
 
@@ -305,6 +306,61 @@ module('unit - `MF.Fragment`', function(hooks) {
 
       assert.ok(person.get('name.readyWasCalled'), 'when creating model that has fragment');
       assert.ok(person.get('names').isEvery('readyWasCalled'), 'when creating model that has fragmentArray');
+    });
+  });
+
+  module('fragment bug when initially set to `null`', function() {
+    let server;
+    hooks.beforeEach(function() {
+      server = new Pretender();
+      server.post('/people', () => {
+        return [
+          200,
+          { 'Content-Type': 'application/json' },
+          JSON.stringify({
+            person: {
+              id: 1,
+              title: 'Mr.',
+              nickName: 'Johnner',
+              names: [{ first: 'John', last: 'Doe' }]
+            }
+          })
+        ];
+      });
+
+    });
+
+    hooks.afterEach(function() {
+      server.shutdown();
+    });
+
+    test('`person.names` is not initially `null`', async function(assert) {
+      let person = store.createRecord('person', {
+        title: 'Mr.'
+      });
+
+      assert.ok(person.names, 'names is not null');
+      assert.notOk(person.nickName, 'nickName is not set');
+
+      await person.save();
+
+      assert.equal(person.nickName, 'Johnner', 'nickName is correctly loaded');
+      assert.deepEqual(person.names.serialize(), [{ first: 'John', last: 'Doe' }], 'names is correct');
+    });
+
+    test('`person.names` is initially `null`', async function(assert) {
+      let person = store.createRecord('person', {
+        title: 'Mr.',
+        names: null
+      });
+
+      assert.notOk(person.names, 'names is null');
+      assert.notOk(person.nickName, 'nickName is not set');
+
+      await person.save();
+
+      assert.equal(person.nickName, 'Johnner', 'nickName is correctly loaded');
+      assert.deepEqual(person.names.serialize(), [{ first: 'John', last: 'Doe' }], 'names is correct');
     });
   });
 });
